@@ -12,12 +12,13 @@ from thrift.protocol import TBinaryProtocol
 from thrift.server import TServer
 
 # from coordinator import coordinator
-# from dfs import replica
-# from dfs.ttypes import *
+from dfs import ReplicaService
 
+
+CHUNK_SIZE = 2048
 
 class ReplicaHandler:
-    def __init__(self, local_dir, is_coordinator, nodes, quorum_size):
+    def __init__(self, local_dir, is_coordinator = 0, nodes = None, quorum_size = None):
         # Local directory
         self.local_dir = local_dir
         self.is_coordinator = is_coordinator
@@ -25,8 +26,8 @@ class ReplicaHandler:
         # List storing tuples of replica server - (host, port, coordinator flag)
         self.nodes = nodes
         
-        self.nr = quorum_size[0][0] # Replicas in read quorum
-        self.nw = quorum_size[0][1] # Replicas in write quorum
+        # self.nr = quorum_size[0][0] # Replicas in read quorum
+        # self.nw = quorum_size[0][1] # Replicas in write quorum
 
         # {fname: version}
         self.file_version = {}
@@ -35,8 +36,59 @@ class ReplicaHandler:
         if is_coordinator:
             pass
 
-       
-        
+    '''
+    Gets size of file 
+    '''
+    def get_file_size(self, fname):
+        path = os.path.join(self.local_dir, fname)
+        return os.path.getsize(path)
+    
+    '''
+    Gets CHUNK_SIZE amount of bytes from a file 
+    '''
+    def get_file_chunk(self, filename, offset, chunk_size):
+        path = os.path.join(self.local_dir, filename)
+        with open(path, "rb") as f:
+            f.seek(offset)
+            return f.read(chunk_size)
+
+    '''
+    Connect to a replica to get latest version of file 
+    '''
+    def connect_to_replica(self, ip, port):
+        try:
+            transport = TSocket.TSocket(ip, port)
+            transport = TTransport.TBufferedTransport(transport)
+            protocol = TBinaryProtocol.TBinaryProtocol(transport)
+            client = ReplicaService.Client(protocol)
+            transport.open()
+            return client, transport  
+        except Exception as e:
+            print(f"Failed to connect to node {ip}:{port} - {e}")
+            return None, None  
+    
+    '''
+    Copy file from another replica into local directory
+    '''
+    def request_file(self, fname, ip, port):
+        client, transport = self.connect_to_replica(ip, port)
+        if client is not None and transport is not None:
+            try: 
+                size = client.get_file_size(fname)
+                with open(os.path.join(self.local_dir, fname), "wb") as f:
+                    offset = 0
+                    while offset < size:
+                        # Gets 2048 bytes from file 
+                        chunk = client.get_file_chunk(fname, offset, CHUNK_SIZE)
+                        f.write(chunk)
+                        offset += len(chunk)
+            except Exception as e:
+                print(f"Error requesting copy of file {fname} from {ip}:{port} - {e}")
+                return -1
+
+            finally: 
+                transport.close()
+
 
 '''
 Parse list of replica severs from compute_nodes.txt
@@ -96,12 +148,13 @@ def get_local_ip():
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: ./replica_server.py <local_directory> <compute_nodes_file>")
+    if len(sys.argv) != 4:
+        print("Usage: ./replica_server.py <local_directory> <compute_nodes_file> <port>")
         sys.exit(1)
 
     dir = sys.argv[1]
     config = sys.argv[2]
+    port = sys.argv[3]
 
     dir_check = check_directory(dir)
     if dir_check == 1:
@@ -110,45 +163,45 @@ def main():
 
     quorum_size, nodes = parse_compute_nodes(config)
 
-    local_ip = get_local_ip()
-    port = None
+    # print(nodes)
+
+    # local_ip = get_local_ip()
+    # print(local_ip)
+    
     is_coordinator = 0
 
-    # Find port based on ip and get coordinator flag
-    for ip, node_port, coordinator_flag in nodes:
-        if ip == local_ip:
-            port = node_port 
-            is_coordinator = coordinator_flag
-            break
+    # # Find port based on ip and get coordinator flag
+    # for ip, node_port, coordinator_flag in nodes:
+    #     if ip == local_ip:
+    #         port = node_port 
+    #         is_coordinator = coordinator_flag
+    #         break
     
-    if port is None:
-        print("Error: Could not determine port from compute_nodes.txt")
-        sys.exit(1)
+    # if port is None:
+    #     print("Error: Could not determine port from compute_nodes.txt")
+    #     sys.exit(1)
     
-    # handler = ReplicaHandler(dir, is_coordinator, nodes, quorum_size)
+    handler = ReplicaHandler(dir, is_coordinator, nodes, quorum_size)
 
 
-    # # Create server
-    # processor = dfs.ReplicaService.Processor(handler)
-    # transport = TSocket.TServerSocket(host="0.0.0.0", port=port)
-    # tfactory = TTransport.TBufferedTransportFactory()
-    # pfactory = TBinaryProtocol.TBinaryProtocolFactory()
+    # Create server
+    processor = ReplicaService.Processor(handler)
+    transport = TSocket.TServerSocket(host="0.0.0.0", port=port)
+    tfactory = TTransport.TBufferedTransportFactory()
+    pfactory = TBinaryProtocol.TBinaryProtocolFactory()
     
-    # server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
+    server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
     
-    # print(f"Starting replica server on port {port}")
-    # print(f"Local directory: {dir}")
+    print(f"Starting replica server on port {port}")
+    print(f"Local directory: {dir}")
     # print(f"Is coordinator: {is_coordinator}")
     
-    # try:
-    #     server.serve()
-    # except KeyboardInterrupt:
-    #     print("Shutting down")
-
-
+    try:
+        server.serve()
+    except KeyboardInterrupt:
+        print("Shutting down")
 
 
 if __name__ == "__main__":
     main()
 
-    
