@@ -26,6 +26,7 @@ class ReplicaHandler:
         # List storing tuples of replica server - (host, port, coordinator flag)
         self.nodes = nodes
         
+        # For phase 2
         # self.nr = quorum_size[0][0] # Replicas in read quorum
         # self.nw = quorum_size[0][1] # Replicas in write quorum
 
