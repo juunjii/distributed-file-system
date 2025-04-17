@@ -17,6 +17,6 @@ service ReplicaService {
     i32 manage_write(1:string fname, 2:binary data)
     i32 get_versionnum(1:string fname)
     void set_versionnum(1:string fname, 2:i32 versionnum)
-    
+    void replicate(1:string fname, 2:binary data, 3:i32 version)
 
 }
