@@ -1,7 +1,10 @@
+from queue import Queue
+import random
 import sys
 import os
 import glob
 import socket
+import threading
 
 sys.path.append('gen-py')
 sys.path.insert(0, glob.glob('../thrift-0.19.0/lib/py/build/lib*')[0])
@@ -32,10 +35,31 @@ class ReplicaHandler:
 
         # {fname: version}
         self.file_version = {}
+        self.lock = threading.Lock()
+        self.requests = Queue()
 
         # Starts processing client request if coordinator 
         if is_coordinator:
-            pass
+            thread = threading.Thread(target=self.thread_func)
+            thread.daemon = True
+            thread.start()
+
+
+    def thread_func(self):
+        while True:
+            request = self.requests.get()
+            with self.lock:
+                if request["t"] == "r":
+                    self.manage_write(request)
+                else:
+                    self.manage_read(request)
+            self.requests.task_done()
+
+    def get_versionnum(self, fname):
+        return self.file_version.get(fname, -1)
+    
+    def set_versionnum(self, fname, version):
+        self.file_version[fname] = version
 
     '''
     Gets size of file 
@@ -43,6 +67,12 @@ class ReplicaHandler:
     def get_file_size(self, fname):
         path = os.path.join(self.local_dir, fname)
         return os.path.getsize(path)
+    
+    def replicate(self, fname, data, version):
+        path = os.path.join(self.local_dir, fname) 
+        with open(path, 'wb') as f:
+            f.write(data)
+        self.set_versionnum(fname, version)
     
     '''
     Gets CHUNK_SIZE amount of bytes from a file 
@@ -115,6 +145,70 @@ def parse_compute_nodes(self):
     
     return quorum_size, nodes
 
+def manage_read(self, fname):
+    if not self.is_coordinator:
+        ip, port, i = next(filter(lambda x: x[2] == 1, self.nodes))
+        client, transport = self.connect_to_replica(ip, port)
+        if client and transport:
+            try:
+                return client.manage_read(fname)
+            finally:
+                transport.close()
+    else:
+        self.requests.put({"t": 'r', 'fname': fname})
+
+def manage_write(self, fname, data):
+    if not self.is_coordinator:
+        ip, port, i = next(filter(lambda x: x[2] == 1, self.nodes))
+        client, transport = self.connect_to_replica(ip, port)
+        if client and transport:
+            try:
+                return client.manage_write(fname)
+            finally:
+                transport.close()
+    else:
+        self.requests.put({"t": 'r', 'fname': fname, 'date': data})
+
+def coord_read(self, request):
+    q = random.sample(self.nodes, self.nr)
+    versions = []
+    for ip, port, i in q:
+        client, transport = self.connect_to_replica(ip, port)
+        if client and transport:
+            try:
+                versions.append((client.get_versionnum(request["fname"]), ip, port))
+            finally:
+                transport.close()
+    if len(versions) == 0:
+        return
+    max, ip, port = max(versions)
+    local = self.get_versionnum(request["fname"])
+    if local < max:
+        self.request_file(request["fname"], ip, port)
+
+def coord_write(self, request):
+    fname = request['fname']
+    data = request['data']
+    q = random.sample(self.nodes, self.nw)
+    versions = []
+    for ip, port, i in q:
+        client, transport = self.connect_to_replica(ip, port)
+        if client and transport:
+            try:
+                versions.append((client.get_versionnum(request["fname"]), ip, port))
+            finally:
+                transport.close()
+    max_ver = max(versions + [0]) + 1
+    self.replicate(fname, data, max_ver)
+    for ip, port, _ in q:
+        if (ip, port) != (get_local_ip(), int(sys.argv[3])):
+            client, transport = self.connect_to_replica(ip, port)
+            if client and transport:
+                try:
+                    client.replicate(fname, data, max_ver)
+                finally:
+                    transport.close()
+        
 '''
 Checks if local directory exist, 
 else creates it 

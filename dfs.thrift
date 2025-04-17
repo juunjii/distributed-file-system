@@ -12,4 +12,11 @@ service ReplicaService {
 
     // Copy file from another replica
     void request_file(1: string fname, 2: string ip, 3: i32 port)
+
+    i32 manage_read(1:string fname)
+    i32 manage_write(1:string fname, 2:binary data)
+    i32 get_versionnum(1:string fname)
+    void set_versionnum(1:string fname, 2:i32 versionnum)
+    
+
 }
