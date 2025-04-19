@@ -69,6 +69,7 @@ class ReplicaHandler:
         path = os.path.join(self.local_dir, fname)
         return os.path.getsize(path)
     
+    '''Called by coordintaor, replicates data into local file directory'''
     def replicate(self, fname, data, version):
         path = os.path.join(self.local_dir, fname) 
         with open(path, 'wb') as f:
