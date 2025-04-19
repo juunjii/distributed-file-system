@@ -186,14 +186,11 @@ class ReplicaHandler:
                     transport.close()
 
         # Get the max of the existing file versions and update everyone to the next version
-        print(versions)
         version_nums = [v[0] for v in versions]
         max_ver = max(version_nums + [0]) + 1
-        print(max_ver, "got to here")
 
-        self.replicate(fname, data, max_ver)
         for ip, port, _ in q:
-            if (ip, port) != (get_local_ip(), int(sys.argv[3])):
+            if ip != get_local_ip() or port != int(sys.argv[3]):
                 client, transport = self.connect_to_replica(ip, port)
                 if client and transport:
                     try:
@@ -201,6 +198,8 @@ class ReplicaHandler:
                         client.replicate(fname, data, max_ver)
                     finally:
                         transport.close()
+            else:
+                self.replicate(fname, data, max_ver)
             
     '''Get;s local files with versions'''
     def get_local_files(self):
@@ -218,18 +217,18 @@ class ReplicaHandler:
                         finally:
                             transport.close()
         else:
-            all_files = {}
+            files = {}
             for ip, port, _ in self.nodes:
                 client, transport = self.connect_to_replica(ip, port)
                 if client and transport:
                     try:
                         files = client.get_local_files()
                         for fname, version in files.items():
-                            if fname not in all_files or version > all_files[fname]:
-                                all_files[fname] = version
+                            if fname not in files or version > files[fname]:
+                                files[fname] = version
                     finally:
                         transport.close()
-            return all_files
+            return files
 
 '''
 Parse list of replica severs from compute_nodes.txt
