@@ -28,6 +28,13 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  string get_file_chunk(string fname, i64 offset, i64 chunk_size)')
     print('  void writeFileChunk(string fname, string data, i64 offset)')
     print('  void request_file(string fname, string ip, i32 port)')
+    print('  i32 manage_read(string fname)')
+    print('  i32 manage_write(string fname, string data)')
+    print('  i32 get_versionnum(string fname)')
+    print('  void set_versionnum(string fname, i32 versionnum)')
+    print('  void replicate(string fname, string data, i32 version)')
+    print('   list_files()')
+    print('   get_local_files()')
     print('')
     sys.exit(0)
 
@@ -130,6 +137,48 @@ elif cmd == 'request_file':
         print('request_file requires 3 args')
         sys.exit(1)
     pp.pprint(client.request_file(args[0], args[1], eval(args[2]),))
+
+elif cmd == 'manage_read':
+    if len(args) != 1:
+        print('manage_read requires 1 args')
+        sys.exit(1)
+    pp.pprint(client.manage_read(args[0],))
+
+elif cmd == 'manage_write':
+    if len(args) != 2:
+        print('manage_write requires 2 args')
+        sys.exit(1)
+    pp.pprint(client.manage_write(args[0], args[1],))
+
+elif cmd == 'get_versionnum':
+    if len(args) != 1:
+        print('get_versionnum requires 1 args')
+        sys.exit(1)
+    pp.pprint(client.get_versionnum(args[0],))
+
+elif cmd == 'set_versionnum':
+    if len(args) != 2:
+        print('set_versionnum requires 2 args')
+        sys.exit(1)
+    pp.pprint(client.set_versionnum(args[0], eval(args[1]),))
+
+elif cmd == 'replicate':
+    if len(args) != 3:
+        print('replicate requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.replicate(args[0], args[1], eval(args[2]),))
+
+elif cmd == 'list_files':
+    if len(args) != 0:
+        print('list_files requires 0 args')
+        sys.exit(1)
+    pp.pprint(client.list_files())
+
+elif cmd == 'get_local_files':
+    if len(args) != 0:
+        print('get_local_files requires 0 args')
+        sys.exit(1)
+    pp.pprint(client.get_local_files())
 
 else:
     print('Unrecognized method %s' % cmd)
