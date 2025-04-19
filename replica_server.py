@@ -54,9 +54,9 @@ class ReplicaHandler:
                     self.coord_write(request)
             self.requests.task_done()
 
-    '''Get the file version, -1 if filename doesn't exist'''
+    '''Get the file version, 0 if filename doesn't exist'''
     def get_versionnum(self, fname):
-        return self.file_version.get(fname, -1)
+        return self.file_version.get(fname, 0)
     
     '''Set file version'''
     def set_versionnum(self, fname, version):
@@ -122,6 +122,115 @@ class ReplicaHandler:
                 transport.close()
 
 
+    '''Called by client/coordinator, this code handles read requests'''
+    def manage_read(self, fname):
+        if not self.is_coordinator:
+            for ip, port, is_coord in self.nodes:
+                if is_coord == 1:
+                    client, transport = self.connect_to_replica(ip, port)
+                    if client and transport:
+                        try:
+                            return client.manage_read(fname)
+                        finally:
+                            transport.close()
+        else:
+            self.requests.put({"t": 'r', 'fname': fname})
+
+    '''Called by client/coordinator, this code handles write requests'''
+    def manage_write(self, fname, data):
+        if not self.is_coordinator:
+            for ip, port, is_coord in self.nodes:
+                if is_coord == 1:
+                    client, transport = self.connect_to_replica(ip, port)
+                    if client and transport:
+                        try:
+                            return client.manage_write(fname, data)
+                        finally:
+                            transport.close()
+        else:
+            self.requests.put({"t": 'w', 'fname': fname, 'data': data})
+        return 0
+
+    '''Coordintator's read function, randomly fetches nr nodes to read from'''
+    def coord_read(self, request):
+        q = random.sample(self.nodes, self.nr)
+        versions = []
+        for ip, port, i in q:
+            client, transport = self.connect_to_replica(ip, port)
+            if client and transport:
+                try:
+                    versions.append((client.get_versionnum(request["fname"]), ip, port))
+                finally:
+                    transport.close()
+        if len(versions) == 0:
+            return
+        max_version, ip, port = max(versions)
+        local = self.get_versionnum(request["fname"])
+        if local < max_version:
+            # Local file is out of date
+            self.request_file(request["fname"], ip, port)
+
+    '''Coordinator's write function, randomly grabs nw nodes to write'''
+    def coord_write(self, request):
+        fname = request['fname']
+        data = request['data']
+        q = random.sample(self.nodes, self.nw)
+        versions = []
+        for ip, port, i in q:
+            client, transport = self.connect_to_replica(ip, port)
+            if client and transport:
+                try:
+                    # Gather every node's file version
+                    versions.append((client.get_versionnum(request["fname"]), ip, port))
+                finally:
+                    transport.close()
+
+        # Get the max of the existing file versions and update everyone to the next version
+        print(versions)
+        version_nums = [v[0] for v in versions]
+        max_ver = max(version_nums + [0]) + 1
+        print(max_ver, "got to here")
+
+        self.replicate(fname, data, max_ver)
+        for ip, port, _ in q:
+            if (ip, port) != (get_local_ip(), int(sys.argv[3])):
+                client, transport = self.connect_to_replica(ip, port)
+                if client and transport:
+                    try:
+                        # Make the replicas copy the files down
+                        client.replicate(fname, data, max_ver)
+                    finally:
+                        transport.close()
+            
+    '''Get;s local files with versions'''
+    def get_local_files(self):
+        return self.file_version
+
+    '''Called by client to list all files, forwards to replica which does the work of gathering all the file info'''
+    def list_files(self):
+        if not self.is_coordinator:
+            for ip, port, is_coord in self.nodes:
+                if is_coord == 1:
+                    client, transport = self.connect_to_replica(ip, port)
+                    if client and transport:
+                        try:
+                            return client.list_files()
+                        finally:
+                            transport.close()
+        else:
+            all_files = {}
+            for ip, port, _ in self.nodes:
+                client, transport = self.connect_to_replica(ip, port)
+                if client and transport:
+                    try:
+                        files = client.get_local_files()
+                        for fname, version in files.items():
+                            if fname not in all_files or version > all_files[fname]:
+                                all_files[fname] = version
+                    finally:
+                        transport.close()
+            return all_files
+
 '''
 Parse list of replica severs from compute_nodes.txt
 Gets compute nodes' respective ip, port, flag 
@@ -146,82 +255,6 @@ def parse_compute_nodes(self):
     
     return quorum_size, nodes
 
-'''Called by client/coordinator, this code handles read requests'''
-def manage_read(self, fname):
-    if not self.is_coordinator:
-        for ip, port, is_coord in self.nodes:
-            if is_coord == 1:
-                client, transport = self.connect_to_replica(ip, port)
-                if client and transport:
-                    try:
-                        return client.manage_read(fname)
-                    finally:
-                        transport.close()
-    else:
-        self.requests.put({"t": 'r', 'fname': fname})
-
-'''Called by client/coordinator, this code handles write requests'''
-def manage_write(self, fname, data):
-    if not self.is_coordinator:
-        for ip, port, is_coord in self.nodes:
-            if is_coord == 1:
-                client, transport = self.connect_to_replica(ip, port)
-                if client and transport:
-                    try:
-                        return client.manage_write(fname)
-                    finally:
-                        transport.close()
-    else:
-        self.requests.put({"t": 'r', 'fname': fname, 'date': data})
-
-'''Coordintator's read function, randomly fetches nr nodes to read from'''
-def coord_read(self, request):
-    q = random.sample(self.nodes, self.nr)
-    versions = []
-    for ip, port, i in q:
-        client, transport = self.connect_to_replica(ip, port)
-        if client and transport:
-            try:
-                versions.append((client.get_versionnum(request["fname"]), ip, port))
-            finally:
-                transport.close()
-    if len(versions) == 0:
-        return
-    max, ip, port = max(versions)
-    local = self.get_versionnum(request["fname"])
-    if local < max:
-        # Local file is out of date
-        self.request_file(request["fname"], ip, port)
-
-'''Coordinator's write function, randomly grabs nw nodes to write'''
-def coord_write(self, request):
-    fname = request['fname']
-    data = request['data']
-    q = random.sample(self.nodes, self.nw)
-    versions = []
-    for ip, port, i in q:
-        client, transport = self.connect_to_replica(ip, port)
-        if client and transport:
-            try:
-                # Gather every node's file version
-                versions.append((client.get_versionnum(request["fname"]), ip, port))
-            finally:
-                transport.close()
-
-    # Get the max of the existing file versions and update everyone to the next version
-    max_ver = max(versions + [0]) + 1
-
-    self.replicate(fname, data, max_ver)
-    for ip, port, _ in q:
-        if (ip, port) != (get_local_ip(), int(sys.argv[3])):
-            client, transport = self.connect_to_replica(ip, port)
-            if client and transport:
-                try:
-                    # Make the replicas copy the files down
-                    client.replicate(fname, data, max_ver)
-                finally:
-                    transport.close()
-        
 '''
 Checks if local directory exist, 
 else creates it 
@@ -254,35 +287,6 @@ def get_local_ip():
         s.close()
     return ip
 
-'''Get;s local files with versions'''
-def get_local_files(self):
-    return self.file_version
-
-'''Called by client to list all files, forwards to replica which does the work of gathering all the file info'''
-def list_files(self):
-    if not self.is_coordinator:
-        for ip, port, is_coord in self.nodes:
-            if is_coord == 1:
-                client, transport = self.connect_to_replica(ip, port)
-                if client and transport:
-                    try:
-                        return client.list_files(fname)
-                    finally:
-                        transport.close()
-    else:
-        all_files = {}
-        for ip, port, _ in self.nodes:
-            client, transport = self.connect_to_replica(ip, port)
-            if client and transport:
-                try:
-                    files = client.get_local_files()
-                    for fname, version in files.items():
-                        if fname not in all_files or version > all_files[fname]:
-                            all_files[fname] = version
-                finally:
-                    transport.close()
-        return all_files
-
 def main():
     if len(sys.argv) != 4:
         print("Usage: ./replica_server.py <local_directory> <compute_nodes_file> <port>")
@@ -290,7 +294,7 @@ def main():
 
     dir = sys.argv[1]
     config = sys.argv[2]
-    port = sys.argv[3]
+    port = int(sys.argv[3])
 
     dir_check = check_directory(dir)
     if dir_check == 1:
@@ -302,13 +306,13 @@ def main():
     # print(nodes)
 
     local_ip = get_local_ip()
-    # print(local_ip)
+    print(local_ip)
     
     is_coordinator = 0
 
     # # Find port based on ip and get coordinator flag
     for ip, node_port, coordinator_flag in nodes:
-        if ip == local_ip:
+        if ip == local_ip and port==node_port:
             # port = node_port 
             is_coordinator = coordinator_flag
             break
