@@ -21,11 +21,24 @@ service ReplicaService {
     // Copy file from another replica
     void request_file(1: string fname, 2: string ip, 3: i32 port)
 
+    // accepts read requests from clients
     Res manage_read(1:string fname)
+
+    // accepts writes from clients
     i32 manage_write(1:string fname, 2:binary data)
+
+    // gets version num of a certain file
     i32 get_versionnum(1:string fname)
+
+    // sets file version num
     void set_versionnum(1:string fname, 2:i32 versionnum)
+
+    // replicates a file locally from another machine
     void replicate(1:string fname, 2:binary data, 3:i32 version)
+
+    // lists all files in system
     map<string, i32> list_files()
+
+    // provides local files to caller
     map<string, i32> get_local_files()
 }
