@@ -318,7 +318,7 @@ def get_local_ip():
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: ./replica_server.py <local_directory> <port>")
+        print("Usage: python3 replica_server.py <local_directory> <port>")
         sys.exit(1)
 
     dir = sys.argv[1]
