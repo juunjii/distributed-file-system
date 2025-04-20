@@ -16,6 +16,7 @@ from thrift.server import TServer
 
 # from coordinator import coordinator
 from dfs import ReplicaService
+from dfs.ttypes import Res
 
 CHUNK_SIZE = 2048
 
@@ -131,11 +132,39 @@ class ReplicaHandler:
                     client, transport = self.connect_to_replica(ip, port)
                     if client and transport:
                         try:
-                            return client.manage_read(fname)
+                            # Provide the client the location of the data to grab
+                            res = client.manage_read(fname)
+                            return res
                         finally:
                             transport.close()
         else:
-            self.requests.put({"t": 'r', 'fname': fname})
+            q = random.sample(self.nodes, self.nr)
+            versions = []
+            for ip, port, _ in q:
+                client, transport = self.connect_to_replica(ip, port)
+                if client and transport:
+                    try:
+                        v = client.get_versionnum(fname)
+                        if (v != 0):
+                            versions.append((v, ip, port))
+                    finally:
+                        transport.close()
+
+            if self.get_versionnum(fname) > 0:
+                versions.append((self.get_versionnum(fname), get_local_ip(), int(sys.argv[2])))
+            if len(versions) == 0:
+                return Res(version=-1, host="", port=-1, file_exists=False) 
+
+            # Get replica with highest version
+            highest_version, source_ip, source_port = max(versions)
+
+            # check coord
+            # local_version = self.get_versionnum(fname)
+            # if local_version > highest_version:
+            #     highest_version = local_version
+            #     source_ip, source_port = get_local_ip(), int(sys.argv[2])
+
+            return Res(version=highest_version, host=source_ip, port=source_port, file_exists=True)
 
     '''Called by client/coordinator, this code handles write requests'''
     def manage_write(self, fname, data):
@@ -191,7 +220,7 @@ class ReplicaHandler:
         max_ver = max(version_nums + [0]) + 1
 
         for ip, port, _ in q:
-            if ip != get_local_ip() or port != int(sys.argv[3]):
+            if ip != get_local_ip() or port != int(sys.argv[2]):
                 client, transport = self.connect_to_replica(ip, port)
                 if client and transport:
                     try:
@@ -288,13 +317,13 @@ def get_local_ip():
     return ip
 
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: ./replica_server.py <local_directory> <compute_nodes_file> <port>")
+    if len(sys.argv) != 3:
+        print("Usage: ./replica_server.py <local_directory> <port>")
         sys.exit(1)
 
     dir = sys.argv[1]
-    config = sys.argv[2]
-    port = int(sys.argv[3])
+    config = "compute_nodes.txt"
+    port = int(sys.argv[2])
 
     dir_check = check_directory(dir)
     if dir_check == 1:

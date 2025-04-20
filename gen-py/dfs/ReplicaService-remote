@@ -28,7 +28,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  string get_file_chunk(string fname, i64 offset, i64 chunk_size)')
     print('  void writeFileChunk(string fname, string data, i64 offset)')
     print('  void request_file(string fname, string ip, i32 port)')
-    print('  i32 manage_read(string fname)')
+    print('  Res manage_read(string fname)')
     print('  i32 manage_write(string fname, string data)')
     print('  i32 get_versionnum(string fname)')
     print('  void set_versionnum(string fname, i32 versionnum)')
