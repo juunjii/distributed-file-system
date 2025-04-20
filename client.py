@@ -13,6 +13,8 @@ from thrift.protocol import TBinaryProtocol
 
 # copy_test.py
 from dfs import ReplicaService
+from dfs.ttypes import Res
+
 from replica_server import ReplicaHandler
 '''
 Parse list of replica severs from compute_nodes.txt
@@ -90,22 +92,39 @@ def main():
 
     if operation == "read":
         if len(sys.argv) != 5:
-                print("Usage: read <filename>")
-                sys.exit(1)
+            print("Usage: read <filename>")
+            sys.exit(1)
         fname = sys.argv[4]
 
         try:
-            # Get size from replica
-            size = client.get_file_size(fname)
+            result = client.manage_read(fname)
+
+            if result is None or result.file_exists == False:
+                print(f"Error: File '{fname}' not found in the system.")
+                sys.exit(1)
+            source_ip = result.host
+            source_port = result.port
             if not os.path.exists(CLIENT_LOCAL_DIR):
                 os.makedirs(CLIENT_LOCAL_DIR)
-            with open(os.path.join(CLIENT_LOCAL_DIR, fname), "wb") as f:
+
+            source_client, source_transport = connect_to_replica(source_ip, source_port)
+            if not source_client or not source_transport:
+                print(f"Error: Unable to connect to the source replica at {source_ip}:{source_port}")
+                sys.exit(1)
+
+            local_file_path = os.path.join(CLIENT_LOCAL_DIR, fname)
+
+            with open(local_file_path, "wb") as wf:
                 offset = 0
-                while offset < size:
-                    chunk = client.get_file_chunk(fname, offset, CHUNK_SIZE)
-                    f.write(chunk)
+                while True:
+                    chunk = source_client.get_file_chunk(fname, offset, CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    wf.write(chunk)
                     offset += len(chunk)
+
             print(f"File '{fname}' downloaded to '{CLIENT_LOCAL_DIR}'")
+
         except Exception as e:
             print(f"Error reading file: {e}")
         finally:

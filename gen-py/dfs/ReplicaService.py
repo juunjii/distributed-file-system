@@ -1372,8 +1372,9 @@ class manage_read_result(object):
             if ftype == TType.STOP:
                 break
             if fid == 0:
-                if ftype == TType.I32:
-                    self.success = iprot.readI32()
+                if ftype == TType.STRUCT:
+                    self.success = Res()
+                    self.success.read(iprot)
                 else:
                     iprot.skip(ftype)
             else:
@@ -1387,8 +1388,8 @@ class manage_read_result(object):
             return
         oprot.writeStructBegin('manage_read_result')
         if self.success is not None:
-            oprot.writeFieldBegin('success', TType.I32, 0)
-            oprot.writeI32(self.success)
+            oprot.writeFieldBegin('success', TType.STRUCT, 0)
+            self.success.write(oprot)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -1408,7 +1409,7 @@ class manage_read_result(object):
         return not (self == other)
 all_structs.append(manage_read_result)
 manage_read_result.thrift_spec = (
-    (0, TType.I32, 'success', None, None, ),  # 0
+    (0, TType.STRUCT, 'success', [Res, None], None, ),  # 0
 )
 
 
