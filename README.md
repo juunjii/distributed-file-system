@@ -1,7 +1,7 @@
 To execute each of the components:
 
 ## Replica Server
-python3 replica_server.py <local_directory> <compute_nodes_file> <port>
+python3 replica_server.py <local_directory> <port>
 
 ## Client 
 To interact with the replica servers as a client: 
