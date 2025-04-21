@@ -158,12 +158,6 @@ class ReplicaHandler:
             # Get replica with highest version
             highest_version, source_ip, source_port = max(versions)
 
-            # check coord
-            # local_version = self.get_versionnum(fname)
-            # if local_version > highest_version:
-            #     highest_version = local_version
-            #     source_ip, source_port = get_local_ip(), int(sys.argv[2])
-
             return Res(version=highest_version, host=source_ip, port=source_port, file_exists=True)
 
     '''Called by client/coordinator, this code handles write requests'''
@@ -332,23 +326,17 @@ def main():
 
     quorum_size, nodes = parse_compute_nodes(config)
 
-    # print(nodes)
 
     local_ip = get_local_ip()
-    print(local_ip)
+    print(f"Machine's ip: {local_ip}")
     
     is_coordinator = 0
 
-    # # Find port based on ip and get coordinator flag
+    # Find port based on ip and get coordinator flag
     for ip, node_port, coordinator_flag in nodes:
-        if ip == local_ip and port==node_port:
-            # port = node_port 
+        if ip == local_ip and port==node_port: 
             is_coordinator = coordinator_flag
             break
-    
-    # if port is None:
-    #     print("Error: Could not determine port from compute_nodes.txt")
-    #     sys.exit(1)
     
     handler = ReplicaHandler(dir, is_coordinator, nodes, quorum_size)
 

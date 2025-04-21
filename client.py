@@ -2,6 +2,7 @@
 import os
 import sys
 import glob
+import time
 
 sys.path.append('gen-py')
 sys.path.insert(0, glob.glob('../thrift-0.19.0/lib/py/build/lib*')[0])
@@ -53,13 +54,6 @@ def connect_to_replica(ip, port):
         return None, None
 
 def main():
-    # Trigger the file copy from replica2 (replica running on port 9091)
-    # handler = ReplicaHandler("./replica2_data")
-    # success = handler.request_file("test.txt", "127.0.0.1", 9090)
-
-    # if success != -1:
-    #     print("File copy triggered successfully.")
-
     if len(sys.argv) < 4:
         print("Usage:")
         print("  python client.py <replica_ip> <replica_port> read <filename>")
@@ -74,15 +68,6 @@ def main():
     ip = sys.argv[1]
     port = sys.argv[2]
     operation = sys.argv[3]
-    # nodes = parse_compute_nodes(config)
-    # coordinator = None
-    # for node in nodes:
-    #     if int(node[2]) == 1:
-    #         coordinator = node
-    #         break
-    # if not coordinator:
-    #     print("Must mark one node as a coordinator in compute_nodes.txt")
-    #     sys.exit(1)
         
     client, transport = connect_to_replica(ip, port)
     
@@ -97,6 +82,7 @@ def main():
         fname = sys.argv[4]
 
         try:
+            start_read = time.time()
             result = client.manage_read(fname)
 
             if result is None or result.file_exists == False:
@@ -122,8 +108,11 @@ def main():
                         break
                     wf.write(chunk)
                     offset += len(chunk)
-
+            end_read = time.time()
             print(f"File '{fname}' downloaded to '{CLIENT_LOCAL_DIR}'")
+            elapsed_read_time = end_read - start_read
+            print(f"Reading {fname} took {elapsed_read_time}.")
+
 
         except Exception as e:
             print(f"Error reading file: {e}")
@@ -140,8 +129,13 @@ def main():
             fname = os.path.basename(filepath)
             with open(filepath, "rb") as f:
                 data = f.read()
+            start_write = time.time()
             client.manage_write(fname, data)
+            end_write = time.time()
+            elapsed_write_time = end_write - start_write
             print(f"Successfully wrote file '{fname}' to the system.")
+            print(f"Writing {fname} took {elapsed_write_time}.")
+
         except Exception as e:
             print(f"Error writing file: {e}")
         finally:
