@@ -1,9 +1,6 @@
 To execute each of the components:
 
 ## Replica Server
-To execute each of the components:
-
-## Replica Server
 python3 replica_server.py <local_directory> &lt;port&gt;
 
 ## Client 
